@@ -1,34 +1,60 @@
-export DenseHDF5Array 
-export sparse
+export DenseHDF5Array, extractsparse, extractdense
 import HDF5
 import SparseArrays
 
 """
-Wrapper class for a HDF5 array that has been loaded into memory.
+This class implements a `AbstractArray` wrapper around a HDF5 dataset.
+A HDF5 dataset can thus be stored inside collections that expect an `AbstractArray`, without actually loading any data into memory.
+
+It is also possible to perform calculations on this class, in which case values are retrieved from file on demand.
+While memory-efficient, this approach is likely to be very slow, as it involves multiple (often redundant) I/O calls to the disk.
+
+We recommend using this class as a placeholder for a real array in code that does not require the actual values.
+Once values are explicitly needed, the entire array can be loaded into memory with [`extractdense`](@ref) or [`extractsparse`](@ref).
 """
 struct DenseHDF5Array{T, N} <: HDF5Array{T, N}
     file::String 
     name::String
     dims::Tuple{Vararg{Integer,N}}
 
-    cachedim::Tuple{Vararg{Integer,N}}
-    nblocks::Tuple{Vararg{Integer,N}}
+    # Caching utilities. This is only intended to avoid crushing performance
+    # issues for getindex(), which is only to be used for giving something
+    # sensible to show(). Actual computation should not use this cache.
+    chunkdim::Tuple{Vararg{Integer,N}}
+    nchunks::Tuple{Vararg{Integer,N}}
     cache::Dict{Integer,Array{T,N}}
+end
+
+function blocks_per_dim(blockdim::Tuple{Vararg{Integer}}, dims::Tuple{Vararg{Integer}})
+    N = length(blockdim)
+    tmp = Vector{Int}(undef, N)
+    for i in 1:N
+        tmp[i] = Integer(ceil(dims[i]/blockdim[i]))
+    end
+    return (tmp...,)
 end
 
 """
     HDF5Array(file, name)
 
 Create a `HDF5Array` for a dense dataset inside a HDF5 file `file` at name `name`.
+No values are loaded into memory by the constructor (though `show`ing the matrix may load a few values for display).
 
 # Examples
 ```jldoctest
 julia> using HDF5Arrays
 
-julia> x = DenseHDF5Array("zeisel-brain/dense.h5", "matrix")
+julia> tmp = tempname();
+
+julia> exampledense(tmp, "stuff", (20, 10))
+
+julia> x = DenseHDF5Array(tmp, "stuff");
+
+julia> size(x)
+(20, 10)
 ```
 """
-function DenseHDF5Array(file::String, name::String; cachedim = nothing)
+function DenseHDF5Array(file::String, name::String)
     handle = HDF5.h5open(file)
 
     dset = handle[name]
@@ -38,41 +64,60 @@ function DenseHDF5Array(file::String, name::String; cachedim = nothing)
 
     dims = HDF5.get_extent_dims(dset)[1]
     type = HDF5.get_jl_type(dset)
+    N = length(dims)
 
     # Figuring out the caching dimensions. By default, we set it to 
     # the chunk dimensions (or 100x100x100,etc. if contiguous).
-    if cachedim == nothing
-        if HDF5.get_layout(HDF5.get_create_properties(dset)) == :chunked
-            cachedim = HDF5.get_chunk(dset)
-        else
-            tmp = Vector{Int}(undef, length(dims))
-            fill!(tmp, 100)
-            cachedim = (tmp...,)
-        end
+    if HDF5.get_layout(HDF5.get_create_properties(dset)) == :chunked
+        chunkdim = HDF5.get_chunk(dset)
+    else
+        tmp = Vector{Int}(undef, N)
+        fill!(tmp, 100)
+        chunkdim = (tmp...,)
     end
 
-    N = length(dims)
-    tmp = Vector{Int}(undef, N)
-    for i in 1:N
-        tmp[i] = Integer(ceil(dims[i]/cachedim[i]))
-    end
-    nblocks = (tmp...,)
-
-    return DenseHDF5Array{type, N}(file, name, dims, cachedim, nblocks, Dict{Integer,Array{type,N}}())
+    nchunks = blocks_per_dim(chunkdim, dims)
+    return DenseHDF5Array{type, N}(file, name, dims, chunkdim, nchunks, Dict{Integer,Array{type,N}}())
 end
 
+"""
+    size(x::DenseHDF5Array{T,N})
+
+Get the size of a `DenseHDF5Array{T,N}` as a `N`-tuple.
+"""
 function Base.size(x::DenseHDF5Array{T,N}) where {T,N}
     return x.dims
 end
 
+"""
+    getindex(x::DenseHDF5Array{T,N}, I::Vararg{Integer,N})
+
+Get the value of a `DenseHDF5Array{T,N}` at the position specified by indices `I`.
+It would be unwise to use this function for anything other than `show()` - 
+we suggest using [`extractdense`](@ref) to obtain larger blocks of data.
+
+# Examples
+```jldoctest
+julia> using HDF5Arrays
+
+julia> tmp = tempname();
+
+julia> exampledense(tmp, "stuff", (20, 10))
+
+julia> x = DenseHDF5Array(tmp, "stuff");
+
+julia> getindex(x, 1, 1) 
+Float64
+```
+"""
 function Base.getindex(x::DenseHDF5Array{T,N}, I::Vararg{Integer,N}) where {T,N}
     block_id = 0
     multiplier = 1
     tmp = Vector{Int}(undef, N)
     for i in 1:N
-        tmp[i] = Integer(floor((I[i] - 1) / x.cachedim[i]))
+        tmp[i] = (I[i] - 1) ÷ x.chunkdim[i]
         block_id += multiplier * tmp[i]
-        multiplier *= x.nblocks[i]
+        multiplier *= x.nchunks[i]
     end
 
     # Adding the block to the cache. This should probably be protected
@@ -83,8 +128,8 @@ function Base.getindex(x::DenseHDF5Array{T,N}, I::Vararg{Integer,N}) where {T,N}
 
         indices = Vector{AbstractVector{Int}}(undef, N)
         for i in 1:N
-            start = tmp[i] * x.cachedim[i] + 1
-            finish = min(x.dims[i], start + x.cachedim[i] - 1)
+            start = tmp[i] * x.chunkdim[i] + 1
+            finish = min(x.dims[i], start + x.chunkdim[i] - 1)
             indices[i] = start:finish
         end
 
@@ -93,20 +138,335 @@ function Base.getindex(x::DenseHDF5Array{T,N}, I::Vararg{Integer,N}) where {T,N}
 
     # Fetching the block and extracting the desired element.
     for i in 1:N
-        tmp[i] = (I[i] - 1) % x.cachedim[i] + 1
+        tmp[i] = (I[i] - 1) % x.chunkdim[i] + 1
     end
     return getindex(x.cache[block_id], tmp...)
+end
+
+mutable struct BlockInfo
+    range::AbstractRange{Int}
+    internal::Vector{Int}
+    function BlockInfo(j)
+        new(1:0, Int[j])
+    end
+end
+
+function general_dense_extractor(x::DenseHDF5Array{T,N}, indices, store::Function; blockdim = nothing) where {T,N}
+    # Configuring the block dimensions.
+    if blockdim == nothing
+        blockdim = x.chunkdim
+    end
+
+    # Deciding which blocks have the indices we want.
+    idx = to_indices(x, indices)
+    idx_by_block = Vector{Dict{Int,BlockInfo}}(undef, N)
+    used_blocks = Vector{Vector{Int}}(undef, N)
+    nblocks = Vector{Int}(undef, N)
+
+    for d in 1:N
+        curindex = idx[d]
+        curblockdim = blockdim[d]
+        curblocks = Dict{Int,BlockInfo}()
+
+        for j in curindex
+            b = (j - 1) ÷ curblockdim + 1
+            if !haskey(curblocks, b)
+                curblocks[b] = BlockInfo(j)
+            else
+                push!(curblocks[b].internal, j)
+            end
+        end
+
+        # Indices should already be sorted, so no need
+        # to do any extra sorting on 'internal'.
+        for (_, v) in curblocks
+            first = v.internal[1]
+            v.range = (first):(v.internal[length(v.internal)])
+            for i in 1:length(v.internal)
+                v.internal[i] -= first - 1
+            end
+        end
+
+        idx_by_block[d] = curblocks
+        used_blocks[d] = collect(keys(curblocks))
+        sort!(used_blocks[d])
+        nblocks[d] = length(curblocks)
+    end
+
+    # Extract along the fastest changing dimension. Normally in HDF5 this is the last,
+    # but it seems Julia transposes things for us, so we'll go from the first.
+    curblockpos = Vector{Int}(undef, N)
+    for d in 1:N
+        curblockpos[d] = nblocks[d]
+    end
+
+    curranges = Vector{AbstractRange{Int}}(undef, N)
+    curidx = Vector{Vector{Int}}(undef, N)
+    total_nblocks = prod(nblocks)
+
+    handle = HDF5.h5open(x.file)
+    dset = handle[x.name]
+
+    for b in 1:total_nblocks
+        # Incrementing the blocks.
+        for d in 1:N
+            if curblockpos[d] == nblocks[d]
+                curblockpos[d] = 1
+            else
+                curblockpos[d] += 1
+            end
+
+            curblock = used_blocks[d][curblockpos[d]]
+            curblockinfo = idx_by_block[d][curblock]
+            curranges[d] = curblockinfo.range
+            curidx[d] = curblockinfo.internal
+
+            if curblockpos[d] != 1
+                break
+            end
+        end
+
+        block = getindex(dset, curranges...)
+
+        # Extracting along the chosen block.
+        curstarts = Vector{Int}(undef, N)
+        curpos = Vector{Int}(undef, N)
+        for d in 1:N
+            curpos[d] = length(curidx[d])
+            curstarts[d] = curranges[d][1] - 1
+        end
+        total = prod(curpos)
+        innerpos = Vector{Int}(undef, N)
+        realpos = Vector{Int}(undef, N)
+        
+        for v in 1:total
+            for d in 1:N
+                if curpos[d] == length(curidx[d])
+                    curpos[d] = 1
+                else
+                    curpos[d] += 1
+                end
+                innerpos[d] = curidx[d][curpos[d]]
+                realpos[d] = innerpos[d] + curstarts[d]
+                if curpos[d] != 1
+                    break
+                end
+            end
+
+            val = getindex(block, innerpos...)
+            store(realpos, val)
+        end
+    end
+end
+
+function create_back_mapping(indices)
+    N = length(indices)
+    collated = Vector{Dict{Int,Vector{Int}}}(undef, N)
+    for d in 1:N
+        current = Dict{Int,Vector{Int}}()
+        curindices = indices[d]
+        for i in 1:length(curindices)
+            curdex = curindices[i]
+            if haskey(current, curdex)
+                push!(current[curdex], i)
+            else
+                current[curdex] = [i]
+            end
+        end
+        collated[d] = current
+    end
+    return collated
+end
+
+function sorted_unique_indices(backmap)
+    N = length(backmap)
+    my_indices = Vector{AbstractVector{Int}}(undef, N) 
+    for d in 1:N
+        current = backmap[d]
+        used = collect(keys(current))
+        sort!(used)
+        my_indices[d] = used
+    end
+    return my_indices
+end
+
+"""
+    extractdense(x, I...; blockdim = nothing)
+
+Extract an in-memory dense `Array` from a subset of a `DenseHDF5Array`. 
+The returned array contains the same values as `x[I...]`.
+
+For arbitrary indices, this function performs block-by-block extraction to reduce memory usage.
+The size of each block is determined by `blockdim`, which should be a tuple of length equal to the number of dimensions.
+If `blockdim` is not specified, the chunk dimensions are used instead; if the dataset is stored in a contiguous layout, arbitrary block dimensions are used.
+
+Some optimization is applied if `I` only consists of `AbstractRange{Int}` values.
+
+# Examples
+```jldoctest
+julia> using HDF5Arrays
+
+julia> tmp = tempname();
+
+julia> exampledense(tmp, "stuff", (20, 10))
+
+julia> x = DenseHDF5Array(tmp, "stuff");
+
+julia> y = extractdense(x, 1:5, 1:5);
+
+julia> size(y)
+(5, 5)
+
+julia> y2 = extractdense(x, [1,3,5,7], [2,4,6,8,10]);
+
+julia> size(y2)
+(4, 5)
+```
+"""
+function extractdense(x::DenseHDF5Array{T,N}, I...; blockdim = nothing) where {T,N}
+    indices = to_indices(x, I)
+
+    # Directly extracting if we have an abstract range.
+    all_ars = true;
+    for d in 1:N
+        if !isa(indices[d], AbstractRange{Integer})
+            all_ars = false
+            break
+        end
+    end
+
+    if all_ars
+        handle = HDF5.h5open(x.file)
+        dset = handle[x.name]
+        return getindex(dset, indices...)
+    end
+
+    # Converting into a dictionary of back-mapped indices.
+    collated = create_back_mapping(indices)
+    my_indices = sorted_unique_indices(collated)
+
+    # Creating a function to insert new values into the specified locations.
+    lengths = [length(x) for x in indices]
+    output = Array{T,N}(undef, (lengths...,))
+    FUN = function (pos, val)
+        setdex = Vector{AbstractVector{Int}}(undef, N)
+        for d in 1:N
+            setdex[d] = collated[d][pos[d]]
+        end
+        output[setdex...] .= val
+    end
+
+    # Performing the extraction.
+    general_dense_extractor(x, (my_indices...,), FUN; blockdim = blockdim)
+    return output
+end
+
+"""
+    extractsparse(x, i, j; blockdim = nothing)
+
+Extract an in-memory sparse matrix from a subset of a 2-dimensional `DenseHDF5Array`. 
+The returned matrix contains the same values as `x[i, j]`.
+This assumes that the type is either numeric or boolean, 
+and is only useful when there is a high proportion of zero values in `x`.
+
+For arbitrary indices, this function performs block-by-block extraction to reduce memory usage.
+The size of each block is determined by `blockdim`, which should be a tuple of length equal to the number of dimensions.
+If `blockdim` is not specified, the chunk dimensions are used instead; if the dataset is stored in a contiguous layout, arbitrary block dimensions are used.
+
+# Examples
+```jldoctest
+julia> using HDF5Arrays
+
+julia> tmp = tempname();
+
+julia> exampledense(tmp, "stuff", (20, 10); density = 0.2)
+
+julia> x = DenseHDF5Array(tmp, "stuff");
+
+julia> y = extractsparse(x, 1:5, 1:5);
+
+julia> typeof(y)
+SparseArrays.SparseMatrixCSC{Float64, Int64}
+```
+"""
+function extractsparse(x::DenseHDF5Array{T,2}, i, j; blockdim = nothing) where {T<:Union{Number,Bool}}
+    indices = to_indices(x, (i, j))
+    NR = length(indices[1])
+    NC = length(indices[2])
+
+    # Converting into a dictionary of back-mapped indices.
+    collated = create_back_mapping(indices)
+    my_indices = sorted_unique_indices(collated)
+
+    # Creating a function to insert new values into the specified locations.
+    store = Vector{Dict{Int, T}}(undef, NC)
+    for d in 1:NC
+        store[d] = Dict{Int,T}()
+    end
+
+    FUN = function (position, val)
+        if val != 0
+            for col in collated[2][position[2]]
+                curcol = store[col]
+                for row in collated[1][position[1]]
+                    curcol[row] = val
+                end
+            end
+        end
+    end
+
+    general_dense_extractor(x, (my_indices...,), FUN; blockdim = blockdim)
+
+    # Creating the CSC sparse matrix.
+    ptrs = Vector{Int}(undef, NC + 1)
+    ptrs[1] = 1
+    for i in 1:NC
+        ptrs[i + 1] = ptrs[i] + length(store[i])
+    end
+
+    rows = Vector{Int}()
+    vals = Vector{T}()
+    sizehint!(rows, ptrs[length(ptrs)])
+    sizehint!(vals, ptrs[length(ptrs)])
+
+    for i in 1:NC
+        curstore = store[i]
+        currows = collect(keys(curstore))
+        sort!(currows)
+        for r in currows
+            push!(rows, r)
+            push!(vals, curstore[r])
+        end
+    end
+
+    return SparseArrays.SparseMatrixCSC{T,Int}(NR, NC, ptrs, rows, vals)
 end
 
 """
     Array(x)
 
-Convert a `DenseHDF5Array` into an in-memory `Array` of the relevant type and dimension.
+Convert a `DenseHDF5Array` into an in-memory `Array` of the same type and dimension.
+This is equivalent to using [`extractdense`](@ref) while requesting the full extent of each dimension.
+
+# Examples
+```jldoctest
+julia> using HDF5Arrays
+
+julia> tmp = tempname();
+
+julia> exampledense(tmp, "stuff", (20, 10))
+
+julia> x = DenseHDF5Array(tmp, "stuff");
+
+julia> y = Array(x);
+
+julia> size(y)
+(20, 10)
 """
 function Array{T,N}(x::DenseHDF5Array{T,N}) where {T, N}
-    handle = HDF5.h5open(x.file)
-    dset = handle[x.name]
-    return HDF5.read(dset)
+    colons = Vector{Any}(undef, N)
+    fill!(colons, :)
+    return extractdense(x, colons...)
 end
 
 """
@@ -114,55 +474,24 @@ end
 
 Convert a 2-dimensional `DenseHDF5Array` into an in-memory `SparseMatrix` of the relevant type,
 assuming that the type is either numeric or boolean.
-This is only really sensible when there is a high proportion of zero values.
+This is only sensible when there is a high proportion of zero values in `x`.
+
+# Examples
+```jldoctest
+julia> using HDF5Arrays
+
+julia> tmp = tempname();
+
+julia> exampledense(tmp, "stuff", (20, 10); density = 0.2)
+
+julia> x = DenseHDF5Array(tmp, "stuff");
+
+julia> y = sparse(x);
+
+julia> typeof(y)
+SparseArrays.SparseMatrixCSC{Float64, Int64}
+```
 """
 function sparse(x::DenseHDF5Array{T,2}) where {T<:Union{Number,Bool}}
-    handle = HDF5.h5open(x.file)
-    dset = handle[x.name]
-
-    values = Vector{Vector{T}}(undef, x.dims[2])
-    indices = Vector{Vector{Int}}(undef, x.dims[2])
-    for i in 1:length(values)
-        values[i] = Vector{T}()
-        indices[i] = Vector{Int}()
-    end
-
-    # Extract by block, using the specified cache dimensions. This gets all
-    # blocks down the columns, and then starts working across columns.
-    for cb in 1:x.nblocks[2]
-        cstart = (cb - 1) * x.cachedim[2] + 1
-        cfinish = min(x.dims[2], cstart + x.cachedim[2] - 1)
-
-        for rb in 1:x.nblocks[1]
-            rstart = (rb - 1) * x.cachedim[1] + 1
-            rfinish = min(x.dims[1], rstart + x.cachedim[1] - 1)
-
-            # Adding everything to the cache.
-            block = dset[rstart:rfinish,cstart:cfinish]
-            for c in 1:size(block)[2]
-                actual_c = c + cstart - 1
-                curvals = values[actual_c]
-                curinds = indices[actual_c]
-
-                for r in 1:size(block)[1]
-                    val = Base.getindex(block, r, c)
-                    if val != 0
-                        push!(curinds, r + rstart - 1)
-                        push!(curvals, val)
-                    end
-                end
-            end
-        end
-    end
-
-    # Creating the CSC sparse matrix.
-    ptrs = Vector{Int}(undef, x.dims[2] + 1)
-    ptrs[1] = 1
-    for i in 1:x.dims[2]
-        ptrs[i + 1] = ptrs[i] + length(indices[i])
-    end
-
-    rows = vcat(indices...)
-    vals = vcat(values...)
-    return SparseArrays.SparseMatrixCSC{T,Int}(x.dims[1], x.dims[2], ptrs, rows, vals)
+    return extractsparse(x, :, :)
 end
