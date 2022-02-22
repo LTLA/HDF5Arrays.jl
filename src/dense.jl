@@ -52,6 +52,11 @@ julia> x = DenseHDF5Array(tmp, "stuff");
 
 julia> size(x)
 (20, 10)
+
+julia> using SparseArrays
+
+julia> SparseArrays.issparse(x)
+false
 ```
 """
 function DenseHDF5Array(file::String, name::String)

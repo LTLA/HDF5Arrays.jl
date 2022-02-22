@@ -1,5 +1,4 @@
-export SparseHDF5Matrix
-export sparse
+export SparseHDF5Matrix, sparse, issparse
 import HDF5
 import SparseArrays
 
@@ -44,6 +43,11 @@ julia> x = SparseHDF5Matrix(tmp, "stuff");
 
 julia> size(x)
 (20, 10)
+
+julia> using SparseArrays
+
+julia> SparseArrays.issparse(x)
+true
 ```
 """
 function SparseHDF5Matrix(file::String, name::String)
@@ -69,6 +73,15 @@ Get the size of a `DenseHDF5Array{T,N}` as a `N`-tuple.
 """
 function Base.size(x::SparseHDF5Matrix{Tv,Ti}) where {Tv,Ti}
     return x.dims
+end
+
+"""
+    issparse(x::SparseHDF5Matrix{Tv,Ti})
+
+Returns true.
+"""
+function SparseArrays.issparse(x::SparseHDF5Matrix{Tv, Ti}) where {Tv, Ti}
+    return true 
 end
 
 """
