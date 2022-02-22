@@ -106,7 +106,7 @@ julia> exampledense(tmp, "stuff", (20, 10))
 
 julia> x = DenseHDF5Array(tmp, "stuff");
 
-julia> getindex(x, 1, 1) 
+julia> typeof(getindex(x, 1, 1)) 
 Float64
 ```
 """
@@ -157,7 +157,8 @@ function general_dense_extractor(x::DenseHDF5Array{T,N}, indices, store::Functio
         blockdim = x.chunkdim
     end
 
-    # Deciding which blocks have the indices we want.
+    # Deciding which blocks have the indices we want. Note that indices should
+    # already be sorted and unique prior to calling this function.
     idx = to_indices(x, indices)
     idx_by_block = Vector{Dict{Int,BlockInfo}}(undef, N)
     used_blocks = Vector{Vector{Int}}(undef, N)
@@ -177,7 +178,7 @@ function general_dense_extractor(x::DenseHDF5Array{T,N}, indices, store::Functio
             end
         end
 
-        # Indices should already be sorted, so no need
+        # Indices should already be sorted and unique, so no need
         # to do any extra sorting on 'internal'.
         for (_, v) in curblocks
             first = v.internal[1]
@@ -361,6 +362,45 @@ function extractdense(x::DenseHDF5Array{T,N}, I...; blockdim = nothing) where {T
     return output
 end
 
+function create_csc_matrix(NR::Int, NC::Int, collated_rows::Dict{Int,Vector{Int}}, collated_cols::Dict{Int,Vector{Int}}, store::Vector{Dict{Int,T}}) where {T}
+    rows = Vector{Vector{Int}}(undef, NC)
+    vals = Vector{Vector{T}}(undef, NC)
+    for (kc, vc) in collated_cols
+        curcol = store[kc]
+
+        tmp = Vector{Pair{Int,T}}()
+        for (kr, vr) in curcol
+            for r in collated_rows[kr]
+                push!(tmp, Pair(r, vr))
+            end
+        end
+
+        sort!(tmp)
+        tmpr = [x.first for x in tmp]
+        tmpv = [x.second for x in tmp]
+
+        for c in vc
+            rows[c] = tmpr
+            vals[c] = tmpv
+        end
+
+        store[kc] = Dict{Int,T}() # let the GC clear the values.
+    end
+
+    ptrs = Vector{Int}(undef, NC + 1)
+    ptrs[1] = 1
+    for i in 1:NC
+        ptrs[i + 1] = ptrs[i] + length(rows[i])
+    end
+
+    all_rows = vcat(rows...)
+    rows = nothing # let the GC eat this up
+    all_vals = vcat(vals...)
+    vals = nothing
+
+    return SparseArrays.SparseMatrixCSC{T,Int}(NR, NC, ptrs, all_rows, all_vals)
+end
+
 """
     extractsparse(x, i, j; blockdim = nothing)
 
@@ -399,47 +439,20 @@ function extractsparse(x::DenseHDF5Array{T,2}, i, j; blockdim = nothing) where {
     my_indices = sorted_unique_indices(collated)
 
     # Creating a function to insert new values into the specified locations.
-    store = Vector{Dict{Int, T}}(undef, NC)
-    for d in 1:NC
+    store = Vector{Dict{Int, T}}(undef, x.dims[2])
+    for d in my_indices[2]
         store[d] = Dict{Int,T}()
     end
 
     FUN = function (position, val)
         if val != 0
-            for col in collated[2][position[2]]
-                curcol = store[col]
-                for row in collated[1][position[1]]
-                    curcol[row] = val
-                end
-            end
+            store[position[2]][position[1]] = val
         end
     end
 
     general_dense_extractor(x, (my_indices...,), FUN; blockdim = blockdim)
 
-    # Creating the CSC sparse matrix.
-    ptrs = Vector{Int}(undef, NC + 1)
-    ptrs[1] = 1
-    for i in 1:NC
-        ptrs[i + 1] = ptrs[i] + length(store[i])
-    end
-
-    rows = Vector{Int}()
-    vals = Vector{T}()
-    sizehint!(rows, ptrs[length(ptrs)])
-    sizehint!(vals, ptrs[length(ptrs)])
-
-    for i in 1:NC
-        curstore = store[i]
-        currows = collect(keys(curstore))
-        sort!(currows)
-        for r in currows
-            push!(rows, r)
-            push!(vals, curstore[r])
-        end
-    end
-
-    return SparseArrays.SparseMatrixCSC{T,Int}(NR, NC, ptrs, rows, vals)
+    return create_csc_matrix(NR, NC, collated[1], collated[2], store)
 end
 
 """
