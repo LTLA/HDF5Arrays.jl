@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Home · HDF5Arrays.jl</title><script data-outdated-warner src="assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><script src="../copy.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href>HDF5Arrays.jl</a></span></div><form class="docs-search" action="search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li class="is-active"><a class="tocitem" href>Home</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Quick-start"><span>Quick start</span></a></li><li><a class="tocitem" href="#The-HDF5Array-class"><span>The <code>HDF5Array</code> class</span></a></li><li><a class="tocitem" href="#The-DenseHDF5Array-class"><span>The <code>DenseHDF5Array</code> class</span></a></li><li><a class="tocitem" href="#The-SparseHDF5Matrix-class"><span>The <code>SparseHDF5Matrix</code> class</span></a></li><li><a class="tocitem" href="#Miscellaneous"><span>Miscellaneous</span></a></li><li><a class="tocitem" href="#Contact"><span>Contact</span></a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Home</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Home</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/LTLA/HDF5Arrays.jl/blob/master/docs/src/index.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="HDF5Arrays-for-Julia"><a class="docs-heading-anchor" href="#HDF5Arrays-for-Julia">HDF5Arrays for Julia</a><a id="HDF5Arrays-for-Julia-1"></a><a class="docs-heading-anchor-permalink" href="#HDF5Arrays-for-Julia" title="Permalink"></a></h1><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>This repository ports (parts of) Bioconductor&#39;s <a href="https://bioconductor.org/packages/HDF5Array"><strong>HDF5Array</strong> package</a> to provide a HDF5-backed array abstraction in Julia. Each <code>HDF5Array</code> instance only holds a pointer to the file in memory, and subsets of the data are retrieved on demand. This enables users to manipulate large datasets with minimal memory consumption. We support both dense arrays, represented as HDF5 datasets; and sparse matrices, represented using the <a href="https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/advanced/h5_matrices">10X Genomics layout</a>.</p><p>The <code>HDF5Array</code> class is implemented as a subtype of an <code>AbstractArray</code> and can (in theory) be used interchangeably with <code>Array</code>s for any read operations. In practice, this abstraction is best used for mimicking the size and subsetting behavior of a real array. If values are needed, it is usually more efficient to manually extract large blocks of data from the file with <code>extractdense()</code> and <code>extractsparse()</code>, rather than relying on <code>Base.getindex()</code> to follow a sensible access pattern.</p><p>Write operations are not supported via the <code>HDF5Array</code> interface.</p><h2 id="Quick-start"><a class="docs-heading-anchor" href="#Quick-start">Quick start</a><a id="Quick-start-1"></a><a class="docs-heading-anchor-permalink" href="#Quick-start" title="Permalink"></a></h2><p>Users may install this package from the GitHub repository through the usual process on the Pkg REPL:</p><pre><code class="language-julia hljs">add https://github.com/LTLA/HDF5Arrays.jl</code></pre><p>And then:</p><pre><code class="language-julia hljs">julia&gt; using HDF5Arrays
+
+julia&gt; temp = tempname();
+
+julia&gt; exampledense(temp, &quot;foo&quot;, (50, 100));
+
+julia&gt; x = DenseHDF5Array(temp, &quot;foo&quot;);
+
+julia&gt; size(x)
+(50, 100)
+
+julia&gt; y = Array(x);
+
+julia&gt; typeof(y)
+Matrix{Float64} (alias for Array{Float64, 2})
+
+julia&gt; sub = x[1:10,5:20];
+
+julia&gt; size(sub)
+(10, 16)</code></pre><p>And the same for sparse matrices:</p><pre><code class="language-julia hljs">julia&gt; using HDF5Arrays, SparseArrays
+
+julia&gt; temp = tempname();
+
+julia&gt; examplesparse(temp, &quot;foo&quot;, (50, 100), 0.1);
+
+julia&gt; x = SparseHDF5Matrix(temp, &quot;foo&quot;);
+
+julia&gt; size(x)
+(50, 100)
+
+julia&gt; y = SparseArrays.sparse(x);
+
+julia&gt; typeof(y)
+SparseArrays.SparseMatrixCSC{Float64, Int64}
+
+julia&gt; sub = x[1:10,5:20];
+
+julia&gt; size(sub)
+(10, 16)</code></pre><h2 id="The-HDF5Array-class"><a class="docs-heading-anchor" href="#The-HDF5Array-class">The <code>HDF5Array</code> class</a><a id="The-HDF5Array-class-1"></a><a class="docs-heading-anchor-permalink" href="#The-HDF5Array-class" title="Permalink"></a></h2><h3 id="Class-definition"><a class="docs-heading-anchor" href="#Class-definition">Class definition</a><a id="Class-definition-1"></a><a class="docs-heading-anchor-permalink" href="#Class-definition" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.HDF5Array" href="#HDF5Arrays.HDF5Array"><code>HDF5Arrays.HDF5Array</code></a> — <span class="docstring-category">Type</span></header><section><div><p>The <code>HDF5Array</code> is an abstract type that describes the concept of a HDF5-backed array abstraction. In other words, data is stored inside a HDF5 file and is retrieved on demand rather than being loaded into memory. <code>T</code> is the type of the data while <code>N</code> is the dimensionality.</p><p>Concrete subtypes include the <a href="#HDF5Arrays.DenseHDF5Array"><code>DenseHDF5Array</code></a> and the <a href="#HDF5Arrays.SparseHDF5Matrix"><code>SparseHDF5Matrix</code></a>. Subtypes are expected to implement the <a href="#HDF5Arrays.extractdense-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{N}, Tuple{T}, Tuple{SubArray{T, N, P, I, L}, Vararg{Any}}} where {T, N, P&lt;:HDF5Array{T, N}, I, L}"><code>extractdense</code></a> and <a href="#HDF5Arrays.extractsparse-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}, Tuple{SubArray{T, 2, P, I, L}, Any, Any}} where {T, P&lt;:HDF5Array{T, 2}, I, L}"><code>extractsparse</code></a> methods. They may also override the <code>SparseArrays.issparse</code> method to indicate whether they contain sparse data.</p><p>We provide conversion functions to quickly create in-memory <code>Array</code>s or <code>SparseMatrixCSC</code> objects from any <code>HDF5Array</code>s. In addition, subsetting operations will automatically views on the original array rather than immediately loading data from file. This enables lazy evaluation for memory-efficient operations on a subset of the dataset.</p><p>Currently, all <code>HDF5Array</code>s are read-only; calling <code>setindex!</code> will fail.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/class.jl#L5-L19">source</a></section></article><h3 id="Subsetting"><a class="docs-heading-anchor" href="#Subsetting">Subsetting</a><a id="Subsetting-1"></a><a class="docs-heading-anchor-permalink" href="#Subsetting" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="Base.getindex-Union{Tuple{N}, Tuple{T}, Tuple{HDF5Array{T, N}, Vararg{Any}}} where {T, N}" href="#Base.getindex-Union{Tuple{N}, Tuple{T}, Tuple{HDF5Array{T, N}, Vararg{Any}}} where {T, N}"><code>Base.getindex</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">getindex(x::HDF5Array{T,N}, I...)</code></pre><p>Create a view into a <code>HDF5Array{T,N}</code> at the indices <code>I</code>. This does not read any data from file, only acting as a delayed subsetting operation.</p><p>This view-returning behavior continues when <code>x</code> is already a view on a <code>HDF5Array</code>. In that case, a new view is returned containing recomputed indices based on <code>I</code> and the <code>parentindices(x)</code>.</p><p>Calling <a href="#HDF5Arrays.extractdense-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{N}, Tuple{T}, Tuple{SubArray{T, N, P, I, L}, Vararg{Any}}} where {T, N, P&lt;:HDF5Array{T, N}, I, L}"><code>extractdense</code></a> or <a href="#HDF5Arrays.extractsparse-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}, Tuple{SubArray{T, 2, P, I, L}, Any, Any}} where {T, P&lt;:HDF5Array{T, 2}, I, L}"><code>extractsparse</code></a> on this view will use the indices to extract the desired subset.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; exampledense(tmp, &quot;stuff&quot;, (20, 10))
+
+julia&gt; x = DenseHDF5Array(tmp, &quot;stuff&quot;);
+
+julia&gt; y = x[1:5, :];
+
+julia&gt; isa(y, SubArray)
+true
+
+julia&gt; z = y[1:2,1:5];
+
+julia&gt; isa(z, SubArray)
+true</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/class.jl#L22-L53">source</a></section></article><h3 id="Extraction"><a class="docs-heading-anchor" href="#Extraction">Extraction</a><a id="Extraction-1"></a><a class="docs-heading-anchor-permalink" href="#Extraction" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.extractdense-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{N}, Tuple{T}, Tuple{SubArray{T, N, P, I, L}, Vararg{Any}}} where {T, N, P&lt;:HDF5Array{T, N}, I, L}" href="#HDF5Arrays.extractdense-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{N}, Tuple{T}, Tuple{SubArray{T, N, P, I, L}, Vararg{Any}}} where {T, N, P&lt;:HDF5Array{T, N}, I, L}"><code>HDF5Arrays.extractdense</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">extractdense(x::SubArray{T,N,P&lt;:HDF5Array{T,N},I,L}, indices...; blockdim = nothing)</code></pre><p>Extract an in-memory dense <code>Array</code> from a <code>SubArray</code> <code>x</code> of a parent <code>HDF5Array</code>. The returned matrix contains the same values as <code>x[indices...]</code>, in addition to any subsetting used to create the view on the parent.</p><p><code>blockdim</code> is forwarded to the method for the parent <code>HDF5Array</code>.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; exampledense(tmp, &quot;stuff&quot;, (20, 10))
+
+julia&gt; x = DenseHDF5Array(tmp, &quot;stuff&quot;);
+
+julia&gt; y = x[2:10, [2,3,5,9,10]];
+
+julia&gt; z = extractdense(y, :, :);
+
+julia&gt; size(z)
+(9, 5)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/class.jl#L138-L163">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.extractsparse-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}, Tuple{SubArray{T, 2, P, I, L}, Any, Any}} where {T, P&lt;:HDF5Array{T, 2}, I, L}" href="#HDF5Arrays.extractsparse-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}, Tuple{SubArray{T, 2, P, I, L}, Any, Any}} where {T, P&lt;:HDF5Array{T, 2}, I, L}"><code>HDF5Arrays.extractsparse</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">extractsparse(x::SubArray{T,N,P&lt;:HDF5Array{T,N},I,L}, i, j; blockdim = nothing)</code></pre><p>Extract a sparse matrix from a <code>SubArray</code> <code>x</code> of a parent <code>HDF5Array</code>. The returned matrix contains the same values as <code>x[i, j]</code>, in addition to any subsetting used to create the view on the parent.</p><p><code>blockdim</code> is forwarded to the method for the parent <code>HDF5Array</code>.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; examplesparse(tmp, &quot;stuff&quot;, (20, 10), 0.1)
+
+julia&gt; x = SparseHDF5Matrix(tmp, &quot;stuff&quot;);
+
+julia&gt; y = x[2:10, [2,3,5,9,10]];
+
+julia&gt; z = extractsparse(y, :, :);
+
+julia&gt; size(z)
+(9, 5)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/class.jl#L169-L194">source</a></section></article><h3 id="Conversions"><a class="docs-heading-anchor" href="#Conversions">Conversions</a><a id="Conversions-1"></a><a class="docs-heading-anchor-permalink" href="#Conversions" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="Core.Array-Union{Tuple{HDF5Array{T, N}}, Tuple{N}, Tuple{T}} where {T, N}" href="#Core.Array-Union{Tuple{HDF5Array{T, N}}, Tuple{N}, Tuple{T}} where {T, N}"><code>Core.Array</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">Array(x::HDF5Array{T,N}})</code></pre><p>Convert a <code>HDF5Array</code> into an in-memory <code>Array</code> of the same data type and dimension. This is equivalent to using <a href="#HDF5Arrays.extractdense-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{N}, Tuple{T}, Tuple{SubArray{T, N, P, I, L}, Vararg{Any}}} where {T, N, P&lt;:HDF5Array{T, N}, I, L}"><code>extractdense</code></a> while requesting the full extent of each dimension.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; exampledense(tmp, &quot;stuff&quot;, (20, 10))
+
+julia&gt; x = DenseHDF5Array(tmp, &quot;stuff&quot;);
+
+julia&gt; y = Array(x);
+
+julia&gt; size(y)
+(20, 10)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/class.jl#L72-L93">source</a></section><section><div><pre><code class="nohighlight hljs">Array(x::SubArray{T,N,P&lt;:HDF5Array{T,N},I,L})</code></pre><p>Convert a view of a <code>HDF5Array</code> into an in-memory <code>Array</code> of the same type and dimension. This is equivalent to using <a href="#HDF5Arrays.extractdense-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{N}, Tuple{T}, Tuple{SubArray{T, N, P, I, L}, Vararg{Any}}} where {T, N, P&lt;:HDF5Array{T, N}, I, L}"><code>extractdense</code></a> while requesting the full extent of each dimension.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; exampledense(tmp, &quot;stuff&quot;, (20, 10))
+
+julia&gt; x = DenseHDF5Array(tmp, &quot;stuff&quot;);
+
+julia&gt; y = Array(x[1:10,2:5]);
+
+julia&gt; size(y)
+(10, 4)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/class.jl#L200-L221">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="SparseArrays.sparse-Union{Tuple{HDF5Array{T, 2}}, Tuple{T}} where T&lt;:Number" href="#SparseArrays.sparse-Union{Tuple{HDF5Array{T, 2}}, Tuple{T}} where T&lt;:Number"><code>SparseArrays.sparse</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">sparse(x::HDF5Array{T,N})</code></pre><p>Convert a 2-dimensional <code>HDF5Array</code> into an in-memory sparse matrix of the same data type and dimension, assuming that <code>T</code> is some numeric or boolean type. This is equivalent to using <a href="#HDF5Arrays.extractsparse-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}, Tuple{SubArray{T, 2, P, I, L}, Any, Any}} where {T, P&lt;:HDF5Array{T, 2}, I, L}"><code>extractsparse</code></a> while requesting the full extent of each dimension. Note that this only makes sense if <code>x</code> contains a high proportion of zeros.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays, SparseArrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; examplesparse(tmp, &quot;stuff&quot;, (20, 10), 0.2)
+
+julia&gt; x = SparseHDF5Matrix(tmp, &quot;stuff&quot;);
+
+julia&gt; y = sparse(x);
+
+julia&gt; typeof(y)
+SparseMatrixCSC{Float64, Int64}</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/class.jl#L100-L123">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="SparseArrays.sparse-Union{Tuple{SubArray{T, 2, P, I, L}}, Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}} where {T, P&lt;:HDF5Array{T, 2}, I, L}" href="#SparseArrays.sparse-Union{Tuple{SubArray{T, 2, P, I, L}}, Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}} where {T, P&lt;:HDF5Array{T, 2}, I, L}"><code>SparseArrays.sparse</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">sparse(x::SubArray{T,2,P&lt;:HDF5Array{T,2},I,L})</code></pre><p>Convert a view of a 2-dimensional <code>HDF5Array</code> into an in-memory sparse matrix of the same type and dimension. This is equivalent to using <a href="#HDF5Arrays.extractsparse-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}, Tuple{SubArray{T, 2, P, I, L}, Any, Any}} where {T, P&lt;:HDF5Array{T, 2}, I, L}"><code>extractsparse</code></a> while requesting the full extent of each dimension.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays, SparseArrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; examplesparse(tmp, &quot;stuff&quot;, (20, 10), 0.2)
+
+julia&gt; x = SparseHDF5Matrix(tmp, &quot;stuff&quot;);
+
+julia&gt; y = sparse(x[1:10,2:5]);
+
+julia&gt; typeof(y)
+SparseMatrixCSC{Float64, Int64}</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/class.jl#L228-L249">source</a></section></article><h3 id="Other-methods"><a class="docs-heading-anchor" href="#Other-methods">Other methods</a><a id="Other-methods-1"></a><a class="docs-heading-anchor-permalink" href="#Other-methods" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="Base.setindex!-Union{Tuple{N}, Tuple{T}, Tuple{HDF5Array{T, N}, Any, Vararg{Integer, N}}} where {T, N}" href="#Base.setindex!-Union{Tuple{N}, Tuple{T}, Tuple{HDF5Array{T, N}, Any, Vararg{Integer, N}}} where {T, N}"><code>Base.setindex!</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">setindex!(x::HDF5Array{T,N}, v, I::Vararg{Integer,N})</code></pre><p>All <code>HDF5Array</code>s are strictly read-only, so any attempt to call this function will throw an error.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/class.jl#L63-L67">source</a></section></article><h2 id="The-DenseHDF5Array-class"><a class="docs-heading-anchor" href="#The-DenseHDF5Array-class">The <code>DenseHDF5Array</code> class</a><a id="The-DenseHDF5Array-class-1"></a><a class="docs-heading-anchor-permalink" href="#The-DenseHDF5Array-class" title="Permalink"></a></h2><h3 id="Class-definition-2"><a class="docs-heading-anchor" href="#Class-definition-2">Class definition</a><a class="docs-heading-anchor-permalink" href="#Class-definition-2" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.DenseHDF5Array" href="#HDF5Arrays.DenseHDF5Array"><code>HDF5Arrays.DenseHDF5Array</code></a> — <span class="docstring-category">Type</span></header><section><div><p>This class implements a <code>AbstractArray</code> wrapper around a HDF5 dataset. Instances of this class can be used to represent a HDF5 dataset inside collections that expect an <code>AbstractArray</code>. Most importantly, this class does not load any data into memory on construction (and only minimal loading in its <code>show()</code> method). This allows users to manipulate arbitrarily large datasets in low-memory environments. </p><p>The <code>DenseHDF5Array</code> is structurally dense, reflecting the fact that a HDF5 dataset explicitly stores all values (zero or otherwise). <code>T</code> can be any type though this is usually numeric, and occasionally boolean. Any number of dimensions is supported, but note that the dimensions are permuted in Julia; the first dimension is the fastest changing in Julia but is the slowest changing in HDF5.</p><p>It is also possible to perform calculations on this class, in which case values are retrieved from file on demand. While memory-efficient, this approach is likely to be very slow, as it involves multiple (often redundant) I/O calls to the disk. We recommend using this class as a placeholder for a real array in code that does not require the actual values. Once values are explicitly needed, the entire array can be loaded into memory with <a href="#HDF5Arrays.extractdense-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{N}, Tuple{T}, Tuple{SubArray{T, N, P, I, L}, Vararg{Any}}} where {T, N, P&lt;:HDF5Array{T, N}, I, L}"><code>extractdense</code></a> or <a href="#HDF5Arrays.extractsparse-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}, Tuple{SubArray{T, 2, P, I, L}, Any, Any}} where {T, P&lt;:HDF5Array{T, 2}, I, L}"><code>extractsparse</code></a>.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/dense.jl#L5-L20">source</a></section></article><h3 id="Constructor"><a class="docs-heading-anchor" href="#Constructor">Constructor</a><a id="Constructor-1"></a><a class="docs-heading-anchor-permalink" href="#Constructor" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.DenseHDF5Array-Tuple{String, String}" href="#HDF5Arrays.DenseHDF5Array-Tuple{String, String}"><code>HDF5Arrays.DenseHDF5Array</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">HDF5Array(file, name)</code></pre><p>Create a <code>HDF5Array</code> for a dense dataset inside a HDF5 file <code>file</code> at name <code>name</code>. No values are loaded into memory by the constructor (though <code>show</code>ing the matrix may load a few values for display).</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; exampledense(tmp, &quot;stuff&quot;, (20, 10))
+
+julia&gt; x = DenseHDF5Array(tmp, &quot;stuff&quot;);
+
+julia&gt; size(x)
+(20, 10)
+
+julia&gt; using SparseArrays
+
+julia&gt; SparseArrays.issparse(x)
+false</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/dense.jl#L43-L67">source</a></section></article><h3 id="Basic-methods"><a class="docs-heading-anchor" href="#Basic-methods">Basic methods</a><a id="Basic-methods-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-methods" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="Base.size-Union{Tuple{DenseHDF5Array{T, N}}, Tuple{N}, Tuple{T}} where {T, N}" href="#Base.size-Union{Tuple{DenseHDF5Array{T, N}}, Tuple{N}, Tuple{T}} where {T, N}"><code>Base.size</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">size(x::DenseHDF5Array{T,N})</code></pre><p>Get the size of a <code>DenseHDF5Array{T,N}</code> as a <code>N</code>-tuple.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/dense.jl#L94-L98">source</a></section><section><div><pre><code class="nohighlight hljs">size(x::SparseHDF5Matrix{Tv,Ti})</code></pre><p>Get the size of a <code>DenseHDF5Array{T,N}</code> as a <code>N</code>-tuple.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/sparse.jl#L74-L78">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="Base.getindex-Union{Tuple{N}, Tuple{T}, Tuple{DenseHDF5Array{T, N}, Vararg{Integer, N}}} where {T, N}" href="#Base.getindex-Union{Tuple{N}, Tuple{T}, Tuple{DenseHDF5Array{T, N}, Vararg{Integer, N}}} where {T, N}"><code>Base.getindex</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">getindex(x::DenseHDF5Array{T,N}, I::Vararg{Integer,N})</code></pre><p>Get the value of a <code>DenseHDF5Array{T,N}</code> at the position specified by indices <code>I</code>. It would be unwise to use this function for anything other than <code>show()</code> -  we suggest using <a href="#HDF5Arrays.extractdense-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{N}, Tuple{T}, Tuple{SubArray{T, N, P, I, L}, Vararg{Any}}} where {T, N, P&lt;:HDF5Array{T, N}, I, L}"><code>extractdense</code></a> to obtain larger blocks of data.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; exampledense(tmp, &quot;stuff&quot;, (20, 10))
+
+julia&gt; x = DenseHDF5Array(tmp, &quot;stuff&quot;);
+
+julia&gt; typeof(getindex(x, 1, 1)) 
+Float64</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/dense.jl#L103-L123">source</a></section></article><h3 id="Extraction-2"><a class="docs-heading-anchor" href="#Extraction-2">Extraction</a><a class="docs-heading-anchor-permalink" href="#Extraction-2" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.extractdense-Union{Tuple{N}, Tuple{T}, Tuple{DenseHDF5Array{T, N}, Vararg{Any}}} where {T, N}" href="#HDF5Arrays.extractdense-Union{Tuple{N}, Tuple{T}, Tuple{DenseHDF5Array{T, N}, Vararg{Any}}} where {T, N}"><code>HDF5Arrays.extractdense</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">extractdense(x::DenseHDF5Array{T,N}, I...; blockdim = nothing)</code></pre><p>Extract an in-memory dense <code>Array</code> from a <code>DenseHDF5Array</code>.  The returned array contains the same values as <code>x[I...]</code>.</p><p>For arbitrary indices, this function performs block-by-block extraction to reduce memory usage. The size of each block is determined by <code>blockdim</code>, which should be a tuple of length equal to the number of dimensions. If <code>blockdim</code> is not specified, the chunk dimensions are used instead; if the dataset is stored in a contiguous layout, arbitrary block dimensions are used.</p><p>Some optimization is applied if <code>I</code> only consists of <code>AbstractRange{Int}</code> values.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; exampledense(tmp, &quot;stuff&quot;, (20, 10))
+
+julia&gt; x = DenseHDF5Array(tmp, &quot;stuff&quot;);
+
+julia&gt; y = extractdense(x, 1:5, 1:5);
+
+julia&gt; size(y)
+(5, 5)
+
+julia&gt; y2 = extractdense(x, [1,3,5,7], [2,4,6,8,10]);
+
+julia&gt; size(y2)
+(4, 5)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/dense.jl#L305-L337">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.extractsparse-Union{Tuple{T}, Tuple{DenseHDF5Array{T, 2}, Any, Any}} where T&lt;:Number" href="#HDF5Arrays.extractsparse-Union{Tuple{T}, Tuple{DenseHDF5Array{T, 2}, Any, Any}} where T&lt;:Number"><code>HDF5Arrays.extractsparse</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">extractsparse(x::DenseHDF5Array{T,N}, i, j; blockdim = nothing)</code></pre><p>Extract an in-memory sparse matrix from a 2-dimensional <code>DenseHDF5Array</code>.  The returned matrix contains the same values as <code>x[i, j]</code>. This assumes that the type is either numeric or boolean,  and is only useful when there is a high proportion of zero values in <code>x</code>.</p><p>For arbitrary indices, this function performs block-by-block extraction to reduce memory usage. The size of each block is determined by <code>blockdim</code>, which should be a tuple of length equal to the number of dimensions. If <code>blockdim</code> is not specified, the chunk dimensions are used instead; if the dataset is stored in a contiguous layout, arbitrary block dimensions are used.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; exampledense(tmp, &quot;stuff&quot;, (20, 10); density = 0.2)
+
+julia&gt; x = DenseHDF5Array(tmp, &quot;stuff&quot;);
+
+julia&gt; y = extractsparse(x, 1:5, 1:5);
+
+julia&gt; typeof(y)
+SparseArrays.SparseMatrixCSC{Float64, Int64}</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/dense.jl#L415-L442">source</a></section></article><h2 id="The-SparseHDF5Matrix-class"><a class="docs-heading-anchor" href="#The-SparseHDF5Matrix-class">The <code>SparseHDF5Matrix</code> class</a><a id="The-SparseHDF5Matrix-class-1"></a><a class="docs-heading-anchor-permalink" href="#The-SparseHDF5Matrix-class" title="Permalink"></a></h2><h3 id="Class-definition-3"><a class="docs-heading-anchor" href="#Class-definition-3">Class definition</a><a class="docs-heading-anchor-permalink" href="#Class-definition-3" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.SparseHDF5Matrix" href="#HDF5Arrays.SparseHDF5Matrix"><code>HDF5Arrays.SparseHDF5Matrix</code></a> — <span class="docstring-category">Type</span></header><section><div><p>This class implements a <code>AbstractArray</code> wrapper around a sparse matrix in a HDF5 file. Instances of this class can be used to represent a HDF5 dataset inside collections that expect an <code>AbstractArray</code>. Most importantly, this class does not load any data into memory on construction (and only minimal loading in its <code>show()</code> method). This allows users to manipulate arbitrarily large datasets in low-memory environments. </p><p>HDF5 does not actually implement a native sparse format (at least, not of time of writing). Instead, we expect the 10X Genomics format where the matrix contents are stored in a group containing:</p><ul><li><code>shape</code>, an integer dataset of length 2 containing the number of rows and columns in the matrix.</li><li><code>data</code>, a numeric dataset containing all of the non-zero elements in compressed sparse column (CSC) order.</li><li><code>indices</code>, an integer dataset containing the 0-based row indices of all non-zero elements in CSC order.</li><li><code>indptr</code>, an integer dataset containing the 0-based pointers into <code>indices</code> for the start and end of each column.</li></ul><p>As with the <a href="#HDF5Arrays.DenseHDF5Array"><code>DenseHDF5Array</code></a>, we recommend using instances of this class as a placeholder for a real matrix, rather than computing directly on it. Once values are explicitly needed, the entire array can be loaded into memory with <a href="#HDF5Arrays.extractsparse-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}, Tuple{SubArray{T, 2, P, I, L}, Any, Any}} where {T, P&lt;:HDF5Array{T, 2}, I, L}"><code>extractsparse</code></a>.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/sparse.jl#L5-L21">source</a></section></article><h3 id="Constructor-2"><a class="docs-heading-anchor" href="#Constructor-2">Constructor</a><a class="docs-heading-anchor-permalink" href="#Constructor-2" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.SparseHDF5Matrix-Tuple{String, String}" href="#HDF5Arrays.SparseHDF5Matrix-Tuple{String, String}"><code>HDF5Arrays.SparseHDF5Matrix</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">SparseHDF5Matrix(file, name)</code></pre><p>Create a <code>HDF5Array</code> for a sparse matrix inside a HDF5 file <code>file</code> at group <code>name</code>. The group is expected to follow the 10X Genomics format, see <a href="#HDF5Arrays.SparseHDF5Matrix"><code>SparseHDF5Matrix</code></a> for more details.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; examplesparse(tmp, &quot;stuff&quot;, (20, 10), 0.2)
+
+julia&gt; x = SparseHDF5Matrix(tmp, &quot;stuff&quot;);
+
+julia&gt; size(x)
+(20, 10)
+
+julia&gt; using SparseArrays
+
+julia&gt; SparseArrays.issparse(x)
+true</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/sparse.jl#L33-L57">source</a></section></article><h3 id="Basic-methods-2"><a class="docs-heading-anchor" href="#Basic-methods-2">Basic methods</a><a class="docs-heading-anchor-permalink" href="#Basic-methods-2" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="Base.size-Union{Tuple{SparseHDF5Matrix{Tv, Ti}}, Tuple{Ti}, Tuple{Tv}} where {Tv, Ti}" href="#Base.size-Union{Tuple{SparseHDF5Matrix{Tv, Ti}}, Tuple{Ti}, Tuple{Tv}} where {Tv, Ti}"><code>Base.size</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">size(x::DenseHDF5Array{T,N})</code></pre><p>Get the size of a <code>DenseHDF5Array{T,N}</code> as a <code>N</code>-tuple.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/dense.jl#L94-L98">source</a></section><section><div><pre><code class="nohighlight hljs">size(x::SparseHDF5Matrix{Tv,Ti})</code></pre><p>Get the size of a <code>DenseHDF5Array{T,N}</code> as a <code>N</code>-tuple.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/sparse.jl#L74-L78">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="Base.getindex-Union{Tuple{Ti}, Tuple{Tv}, Tuple{SparseHDF5Matrix{Tv, Ti}, Integer, Integer}} where {Tv, Ti}" href="#Base.getindex-Union{Tuple{Ti}, Tuple{Tv}, Tuple{SparseHDF5Matrix{Tv, Ti}, Integer, Integer}} where {Tv, Ti}"><code>Base.getindex</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">getindex(x::SparseHDF5Matrix{Tv,Ti}, i, j)</code></pre><p>Get the value of <code>x[i,j]</code>. It would be unwise to use this function for anything other than <code>show()</code> -  we suggest using <a href="#HDF5Arrays.extractsparse-Union{Tuple{L}, Tuple{I}, Tuple{P}, Tuple{T}, Tuple{SubArray{T, 2, P, I, L}, Any, Any}} where {T, P&lt;:HDF5Array{T, 2}, I, L}"><code>extractsparse</code></a> to obtain larger blocks of data.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; examplesparse(tmp, &quot;stuff&quot;, (20, 10), 0.2)
+
+julia&gt; x = SparseHDF5Matrix(tmp, &quot;stuff&quot;);
+
+julia&gt; typeof(getindex(x, 1, 1))
+Float64</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/sparse.jl#L92-L112">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="SparseArrays.issparse-Union{Tuple{SparseHDF5Matrix{Tv, Ti}}, Tuple{Ti}, Tuple{Tv}} where {Tv, Ti}" href="#SparseArrays.issparse-Union{Tuple{SparseHDF5Matrix{Tv, Ti}}, Tuple{Ti}, Tuple{Tv}} where {Tv, Ti}"><code>SparseArrays.issparse</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">issparse(x::SparseHDF5Matrix{Tv,Ti})</code></pre><p>Returns true.</p></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/sparse.jl#L83-L87">source</a></section></article><h3 id="Extraction-3"><a class="docs-heading-anchor" href="#Extraction-3">Extraction</a><a class="docs-heading-anchor-permalink" href="#Extraction-3" title="Permalink"></a></h3><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.extractdense-Union{Tuple{Ti}, Tuple{Tv}, Tuple{SparseHDF5Matrix{Tv, Ti}, Any, Any}} where {Tv, Ti}" href="#HDF5Arrays.extractdense-Union{Tuple{Ti}, Tuple{Tv}, Tuple{SparseHDF5Matrix{Tv, Ti}, Any, Any}} where {Tv, Ti}"><code>HDF5Arrays.extractdense</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">extractdense(x::SparseHDF5Matrix{Tv,Ti}, i, j; blockdim = nothing)</code></pre><p>Extract an in-memory dense <code>Matrix</code> from a <code>SparseHDF5Matrix</code>.  The returned matrix contains the same values as <code>x[i, j]</code>.</p><p><code>blockdim</code> is currently ignored and is only provided for consistency with the method for <code>DenseHDF5Array</code>s.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; examplesparse(tmp, &quot;stuff&quot;, (20, 10), 0.2)
+
+julia&gt; x = SparseHDF5Matrix(tmp, &quot;stuff&quot;);
+
+julia&gt; y = extractdense(x, 1:5, [2,3,6,7]);
+
+julia&gt; size(y)
+(5, 4)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/sparse.jl#L207-L230">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.extractsparse-Union{Tuple{Ti}, Tuple{Tv}, Tuple{SparseHDF5Matrix{Tv, Ti}, Any, Any}} where {Tv, Ti}" href="#HDF5Arrays.extractsparse-Union{Tuple{Ti}, Tuple{Tv}, Tuple{SparseHDF5Matrix{Tv, Ti}, Any, Any}} where {Tv, Ti}"><code>HDF5Arrays.extractsparse</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">extractsparse(x::SparseHDF5Matrix{Tv,Ti}, i, j; blockdim = nothing)</code></pre><p>Extract an in-memory sparse matrix from a <code>SparseHDF5Matrix</code> <code>x</code>. The returned matrix contains the same values as <code>x[i, j]</code>.</p><p><code>blockdim</code> is currently ignored and is only provided for consistency with the method for <code>DenseHDF5Array</code>s.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; examplesparse(tmp, &quot;stuff&quot;, (20, 10), 0.2)
+
+julia&gt; x = SparseHDF5Matrix(tmp, &quot;stuff&quot;);
+
+julia&gt; y = extractsparse(x, 1:5, [2,3,6,7]);
+
+julia&gt; size(y)
+(5, 4)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/sparse.jl#L160-L183">source</a></section></article><h2 id="Miscellaneous"><a class="docs-heading-anchor" href="#Miscellaneous">Miscellaneous</a><a id="Miscellaneous-1"></a><a class="docs-heading-anchor-permalink" href="#Miscellaneous" title="Permalink"></a></h2><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.exampledense-Tuple{Any, String, Tuple{Integer, Integer}}" href="#HDF5Arrays.exampledense-Tuple{Any, String, Tuple{Integer, Integer}}"><code>HDF5Arrays.exampledense</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">exampledense(x, name, dims; density = 1, compress = 6, chunkdim = nothing)</code></pre><p>Create an example dense dataset with <code>name</code> inside a HDF5 file/group. <code>x</code> may be either a string containing the name of a new HDF5 file, or a handle into an existing HDf5 file or group. <code>dims</code> should be a tuple specifying the dimensions of the dataset.</p><p>The HDF5 dataset is created with random double-precision values at the specified <code>density</code>. Lowering the <code>density</code> will introduce zero values randomly into the dataset. Note that this setting does not affect the structural density of the dataset.</p><p><code>compress</code> specifies the DEFLATE compression level - if set to zero, no compression is used. <code>chunkdim</code> should be a tuple of length equal to <code>dims</code>, specifying the chunk dimensions to be used for compression. This is heuristically determined if not supplied, and is ignored if <code>compress = 0</code>.</p><p>Nothing is returned by this function.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; exampledense(tmp, &quot;stuff&quot;, (10, 5, 2))
+
+julia&gt; y = DenseHDF5Array(tmp, &quot;stuff&quot;);
+
+julia&gt; size(y)
+(10, 5, 2)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/example.jl#L4-L34">source</a></section></article><article class="docstring"><header><a class="docstring-binding" id="HDF5Arrays.examplesparse-Tuple{Any, String, Tuple{Integer, Integer}, Float64}" href="#HDF5Arrays.examplesparse-Tuple{Any, String, Tuple{Integer, Integer}, Float64}"><code>HDF5Arrays.examplesparse</code></a> — <span class="docstring-category">Method</span></header><section><div><pre><code class="language-julia hljs">examplesparse(x, name, dims, density; compress = 6, chunkdim = 10000)</code></pre><p>Create an example sparse dataset with <code>name</code> inside a HDF5 file/group. <code>x</code> may be either a string containing the name of a new HDF5 file, or a handle into an existing HDf5 file or group. <code>dims</code> should be a tuple specifying the dimensions of the dataset.</p><p>The sparse matrix is created with random double-precision values at the specified <code>density</code>. Contents are written to file inside group <code>name</code> in the 10X Genomics format, which uses the compressed sparse column layout. Briefly: values are stored in <code>data</code>, row indices in <code>indices</code>, column pointers in <code>indptr</code> and the dimensions in <code>shape</code>.</p><p><code>compress</code> specifies the DEFLATE compression level - if set to zero, no compression is used. <code>chunkdim</code> should be a tuple of length equal to <code>dims</code>, specifying the chunk dimensions to be used for compression. This is heuristically determined if not supplied, and is ignored if <code>compress = 0</code>.</p><p>Nothing is returned by this function.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; using HDF5Arrays
+
+julia&gt; tmp = tempname();
+
+julia&gt; examplesparse(tmp, &quot;stuff&quot;, (10, 20), 0.1)
+
+julia&gt; y = SparseHDF5Matrix(tmp, &quot;stuff&quot;);
+
+julia&gt; size(y)
+(10, 20)</code></pre></div><a class="docs-sourcelink" target="_blank" href="https://github.com/LTLA/HDF5Arrays.jl/blob/33d93f3e9f3f0174da0786c519f1f9a73522e3b2/src/example.jl#L64-L94">source</a></section></article><h2 id="Contact"><a class="docs-heading-anchor" href="#Contact">Contact</a><a id="Contact-1"></a><a class="docs-heading-anchor-permalink" href="#Contact" title="Permalink"></a></h2><p>This package is maintained by Aaron Lun (<a href="https://github.com/LTLA"><strong>@LTLA</strong></a>). If you have bug reports or feature requests, please post them as issues at the <a href="https://github.com/LTLA/HDF5Arrays.jl/issues">GitHub repository</a>.</p></article><nav class="docs-footer"><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.12 on <span class="colophon-date" title="Tuesday 22 February 2022 17:57">Tuesday 22 February 2022</span>. Using Julia version 1.7.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
