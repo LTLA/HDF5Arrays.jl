@@ -2,6 +2,21 @@ export HDF5Array, extractsparse, extractdense, sparse
 import HDF5
 import SparseArrays
 
+"""
+The `HDF5Array` is an abstract type that describes the concept of a HDF5-backed array abstraction.
+In other words, data is stored inside a HDF5 file and is retrieved on demand rather than being loaded into memory.
+`T` is the type of the data while `N` is the dimensionality.
+
+Concrete subtypes include the [`DenseHDF5Array`](@ref) and the [`SparseHDF5Matrix`](@ref).
+Subtypes are expected to implement the [`extractdense`](@ref) and [`extractsparse`](@ref) methods.
+They may also override the `SparseArrays.issparse` method to indicate whether they contain sparse data.
+
+We provide conversion functions to quickly create in-memory `Array`s or `SparseMatrixCSC` objects from any `HDF5Array`s.
+In addition, subsetting operations will automatically views on the original array rather than immediately loading data from file.
+This enables lazy evaluation for memory-efficient operations on a subset of the dataset.
+
+Currently, all `HDF5Array`s are read-only; calling `setindex!` will fail.
+"""
 abstract type HDF5Array{T, N} <: AbstractArray{T, N} end
 
 """
@@ -59,7 +74,8 @@ julia> x = DenseHDF5Array(tmp, "stuff");
 julia> y = Array(x);
 
 julia> size(y)
-(10, 4)
+(20, 10)
+```
 """
 function Array{T,N}(x::HDF5Array{T,N}) where {T,N}
     colons = Vector{Any}(undef, N)
@@ -88,7 +104,7 @@ julia> x = SparseHDF5Matrix(tmp, "stuff");
 julia> y = sparse(x);
 
 julia> typeof(y)
-SparseArrays.SparseMatrixCSC{Float64, Int64}
+SparseMatrixCSC{Float64, Int64}
 ```
 """
 function SparseArrays.sparse(x::HDF5Array{T,2}) where {T<:Union{Number,Bool}}
@@ -187,6 +203,7 @@ julia> y = Array(x[1:10,2:5]);
 
 julia> size(y)
 (10, 4)
+```
 """
 function Array{T,N}(x::SubArray{T,N,P,I,L}) where {T,N,P<:HDF5Array{T,N},I,L}
     colons = Vector{Any}(undef, N)
@@ -213,7 +230,7 @@ julia> x = SparseHDF5Matrix(tmp, "stuff");
 julia> y = sparse(x[1:10,2:5]);
 
 julia> typeof(y)
-SparseArrays.SparseMatrixCSC{Float64, Int64}
+SparseMatrixCSC{Float64, Int64}
 ```
 """
 function SparseArrays.sparse(x::SubArray{T,2,P,I,L}) where {T,P<:HDF5Array{T,2},I,L}

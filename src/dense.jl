@@ -4,11 +4,17 @@ import SparseArrays
 
 """
 This class implements a `AbstractArray` wrapper around a HDF5 dataset.
-A HDF5 dataset can thus be stored inside collections that expect an `AbstractArray`, without actually loading any data into memory.
+Instances of this class can be used to represent a HDF5 dataset inside collections that expect an `AbstractArray`.
+Most importantly, this class does not load any data into memory on construction (and only minimal loading in its `show()` method).
+This allows users to manipulate arbitrarily large datasets in low-memory environments. 
+
+The `DenseHDF5Array` is structurally dense, reflecting the fact that a HDF5 dataset explicitly stores all values (zero or otherwise).
+`T` can be any type though this is usually numeric, and occasionally boolean.
+Any number of dimensions is supported, but note that the dimensions are permuted in Julia;
+the first dimension is the fastest changing in Julia but is the slowest changing in HDF5.
 
 It is also possible to perform calculations on this class, in which case values are retrieved from file on demand.
 While memory-efficient, this approach is likely to be very slow, as it involves multiple (often redundant) I/O calls to the disk.
-
 We recommend using this class as a placeholder for a real array in code that does not require the actual values.
 Once values are explicitly needed, the entire array can be loaded into memory with [`extractdense`](@ref) or [`extractsparse`](@ref).
 """

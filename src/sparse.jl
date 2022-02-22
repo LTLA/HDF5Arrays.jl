@@ -4,7 +4,12 @@ import SparseArrays
 
 """
 This class implements a `AbstractArray` wrapper around a sparse matrix in a HDF5 file.
-We expect the 10X Genomics format where the matrix contents are stored in a group containing:
+Instances of this class can be used to represent a HDF5 dataset inside collections that expect an `AbstractArray`.
+Most importantly, this class does not load any data into memory on construction (and only minimal loading in its `show()` method).
+This allows users to manipulate arbitrarily large datasets in low-memory environments. 
+
+HDF5 does not actually implement a native sparse format (at least, not of time of writing).
+Instead, we expect the 10X Genomics format where the matrix contents are stored in a group containing:
 
 - `shape`, an integer dataset of length 2 containing the number of rows and columns in the matrix.
 - `data`, a numeric dataset containing all of the non-zero elements in compressed sparse column (CSC) order.
