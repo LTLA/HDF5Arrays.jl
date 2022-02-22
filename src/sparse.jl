@@ -1,4 +1,4 @@
-export SparseHDF5Matrix, sparse, issparse
+export SparseHDF5Matrix, extractdense, extractsparse, sparse, issparse
 import HDF5
 import SparseArrays
 
@@ -153,7 +153,7 @@ function general_sparse_extractor(x::SparseHDF5Matrix{Tv,Ti}, indices, store::Fu
 end
 
 """
-    extractsparse(x, i, j; blockdim = nothing)
+    extractsparse(x::SparseHDF5Matrix{Tv,Ti}, i, j; blockdim = nothing)
 
 Extract an in-memory sparse matrix from a `SparseHDF5Matrix` `x`.
 The returned matrix contains the same values as `x[i, j]`.
@@ -200,7 +200,7 @@ function extractsparse(x::SparseHDF5Matrix{Tv,Ti}, i, j; blockdim = nothing) whe
 end
 
 """
-    extractdense(x, i, j; blockdim = nothing)
+    extractdense(x::SparseHDF5Matrix{Tv,Ti}, i, j; blockdim = nothing)
 
 Extract an in-memory dense `Matrix` from a `SparseHDF5Matrix`. 
 The returned matrix contains the same values as `x[i, j]`.

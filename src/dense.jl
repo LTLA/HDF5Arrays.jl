@@ -297,7 +297,7 @@ function sorted_unique_indices(backmap)
 end
 
 """
-    extractdense(x, I...; blockdim = nothing)
+    extractdense(x::DenseHDF5Array{T,N}, I...; blockdim = nothing)
 
 Extract an in-memory dense `Array` from a `DenseHDF5Array`. 
 The returned array contains the same values as `x[I...]`.
@@ -407,7 +407,7 @@ function create_csc_matrix(NR::Int, NC::Int, collated_rows::Dict{Int,Vector{Int}
 end
 
 """
-    extractsparse(x, i, j; blockdim = nothing)
+    extractsparse(x::DenseHDF5Array{T,N}, i, j; blockdim = nothing)
 
 Extract an in-memory sparse matrix from a 2-dimensional `DenseHDF5Array`. 
 The returned matrix contains the same values as `x[i, j]`.
@@ -458,58 +458,4 @@ function extractsparse(x::DenseHDF5Array{T,2}, i, j; blockdim = nothing) where {
     general_dense_extractor(x, (my_indices...,), FUN; blockdim = blockdim)
 
     return create_csc_matrix(NR, NC, collated[1], collated[2], store)
-end
-
-"""
-    Array(x)
-
-Convert a `DenseHDF5Array` into an in-memory `Array` of the same type and dimension.
-This is equivalent to using [`extractdense`](@ref) while requesting the full extent of each dimension.
-
-# Examples
-```jldoctest
-julia> using HDF5Arrays
-
-julia> tmp = tempname();
-
-julia> exampledense(tmp, "stuff", (20, 10))
-
-julia> x = DenseHDF5Array(tmp, "stuff");
-
-julia> y = Array(x);
-
-julia> size(y)
-(20, 10)
-"""
-function Array{T,N}(x::DenseHDF5Array{T,N}) where {T, N}
-    colons = Vector{Any}(undef, N)
-    fill!(colons, :)
-    return extractdense(x, colons...)
-end
-
-"""
-    sparse(x)
-
-Convert a 2-dimensional `DenseHDF5Array` into an in-memory `SparseMatrix` of the relevant type,
-assuming that the type is either numeric or boolean.
-This is only sensible when there is a high proportion of zero values in `x`.
-
-# Examples
-```jldoctest
-julia> using HDF5Arrays
-
-julia> tmp = tempname();
-
-julia> exampledense(tmp, "stuff", (20, 10); density = 0.2)
-
-julia> x = DenseHDF5Array(tmp, "stuff");
-
-julia> y = sparse(x);
-
-julia> typeof(y)
-SparseArrays.SparseMatrixCSC{Float64, Int64}
-```
-"""
-function sparse(x::DenseHDF5Array{T,2}) where {T<:Union{Number,Bool}}
-    return extractsparse(x, :, :)
 end
