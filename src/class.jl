@@ -24,6 +24,10 @@ abstract type HDF5Array{T, N} <: AbstractArray{T, N} end
 
 Create a view into a `HDF5Array{T,N}` at the indices `I`.
 This does not read any data from file, only acting as a delayed subsetting operation.
+
+This view-returning behavior continues when `x` is already a view on a `HDF5Array`.
+In that case, a new view is returned containing recomputed indices based on `I` and the `parentindices(x)`.
+
 Calling [`extractdense`](@ref) or [`extractsparse`](@ref) on this view will use the indices to extract the desired subset.
 
 # Examples
@@ -40,10 +44,20 @@ julia> y = x[1:5, :];
 
 julia> isa(y, SubArray)
 true
+
+julia> z = y[1:2,1:5];
+
+julia> isa(z, SubArray)
+true
 ```
 """
 function Base.getindex(x::HDF5Array{T,N}, I...) where {T,N}
     return view(x, I...)
+end
+
+function Base.getindex(x::SubArray{T,N,P,I,L}, indices...) where {T,N,P<:HDF5Array{T,N},I,L}
+    sub = sub_indices(x, indices...)
+    return view(parent(x), sub...)
 end
 
 """
@@ -178,7 +192,7 @@ julia> size(z)
 (9, 5)
 ```
 """
-function extractsparse(x::SubArray{T,N,P,I,L}, i, j; blockdim = nothing) where {T,N,P<:HDF5Array{T,N},I,L}
+function extractsparse(x::SubArray{T,2,P,I,L}, i, j; blockdim = nothing) where {T,P<:HDF5Array{T,2},I,L}
     sub = sub_indices(x, i, j)
     return extractsparse(parent(x), sub...; blockdim = blockdim)
 end
