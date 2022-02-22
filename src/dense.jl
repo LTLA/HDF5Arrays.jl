@@ -294,7 +294,7 @@ end
 """
     extractdense(x, I...; blockdim = nothing)
 
-Extract an in-memory dense `Array` from a subset of a `DenseHDF5Array`. 
+Extract an in-memory dense `Array` from a `DenseHDF5Array`. 
 The returned array contains the same values as `x[I...]`.
 
 For arbitrary indices, this function performs block-by-block extraction to reduce memory usage.
@@ -404,7 +404,7 @@ end
 """
     extractsparse(x, i, j; blockdim = nothing)
 
-Extract an in-memory sparse matrix from a subset of a 2-dimensional `DenseHDF5Array`. 
+Extract an in-memory sparse matrix from a 2-dimensional `DenseHDF5Array`. 
 The returned matrix contains the same values as `x[i, j]`.
 This assumes that the type is either numeric or boolean, 
 and is only useful when there is a high proportion of zero values in `x`.

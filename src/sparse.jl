@@ -142,7 +142,7 @@ end
 """
     extractsparse(x, i, j; blockdim = nothing)
 
-Extract an in-memory sparse matrix from a subset of a `SparseHDF5Matrix` `x`.
+Extract an in-memory sparse matrix from a `SparseHDF5Matrix` `x`.
 The returned matrix contains the same values as `x[i, j]`.
 
 `blockdim` is currently ignored and is only provided for consistency with the method for `DenseHDF5Array`s.
@@ -189,7 +189,7 @@ end
 """
     extractdense(x, i, j; blockdim = nothing)
 
-Extract an in-memory dense `Matrix` from a subset of a 2-dimensional `DenseHDF5Array`. 
+Extract an in-memory dense `Matrix` from a `SparseHDF5Matrix`. 
 The returned matrix contains the same values as `x[i, j]`.
 
 `blockdim` is currently ignored and is only provided for consistency with the method for `DenseHDF5Array`s.
